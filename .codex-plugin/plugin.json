@@ -1,0 +1,25 @@
+{
+  "name": "web-planner-codex",
+  "version": "0.2.0",
+  "description": "Automatically coordinate read-only ChatGPT planning with local Codex execution.",
+  "author": {
+    "name": "l0605556-glitch",
+    "url": "https://github.com/l0605556-glitch"
+  },
+  "homepage": "https://github.com/l0605556-glitch/web-planner-codex",
+  "repository": "https://github.com/l0605556-glitch/web-planner-codex",
+  "keywords": ["chatgpt", "codex", "planning", "mcp"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Web Planner for Codex",
+    "shortDescription": "ChatGPT plans from read-only context; Codex executes locally.",
+    "longDescription": "Routes repository tasks, exchanges structured plans with an existing ChatGPT conversation, and keeps all file changes and command execution inside Codex.",
+    "developerName": "l0605556-glitch",
+    "category": "Developer Tools",
+    "capabilities": ["Read-only planning", "Local execution"],
+    "defaultPrompt": [
+      "Decide whether this task needs ChatGPT planning, then complete it safely.",
+      "Use ChatGPT to plan this multi-stage repository change, then execute it locally."
+    ]
+  }
+}

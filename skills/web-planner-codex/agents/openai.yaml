@@ -1,0 +1,7 @@
+interface:
+  display_name: "网页版规划协作"
+  short_description: "自动判断是否调用 ChatGPT 规划，再由 Codex 执行"
+  default_prompt: "Use $web-planner-codex to route and complete this repository task."
+
+policy:
+  allow_implicit_invocation: true

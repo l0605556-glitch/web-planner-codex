@@ -1,0 +1,32 @@
+{
+  "name": "web-planner-codex",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Read-only MCP bridge between ChatGPT web and a fixed local Codex workspace.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "context": "tsx src/context-cli.ts",
+    "context:built": "node dist/src/context-cli.js",
+    "start": "node dist/src/index.js",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/node": "^2.0.0",
+    "@modelcontextprotocol/server": "^2.0.0",
+    "ignore": "^7.0.5",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "^2.0.0",
+    "@types/node": "^24.3.0",
+    "tsx": "^4.20.5",
+    "typescript": "^6.0.0",
+    "vitest": "^3.2.4"
+  }
+}
