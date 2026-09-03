@@ -6,6 +6,7 @@ import path from "node:path";
 import { localhostHostValidation, localhostOriginValidation, toNodeHandler } from "@modelcontextprotocol/node";
 import { createMcpHandler } from "@modelcontextprotocol/server";
 
+import { createHttpRequestHandler } from "./http/handler.js";
 import { buildMcpServer } from "./mcp/server.js";
 import { WorkspaceService } from "./workspace/service.js";
 
@@ -49,20 +50,14 @@ async function main(): Promise<void> {
   const validateHost = localhostHostValidation();
   const validateOrigin = localhostOriginValidation();
 
-  const httpServer = createServer((request, response) => {
-    const requestUrl = new URL(request.url ?? "/", "http://127.0.0.1");
-    if (request.method === "GET" && requestUrl.pathname === "/health") {
-      response.writeHead(200, { "content-type": "application/json; charset=utf-8" });
-      response.end(JSON.stringify({ status: "ok", access: "read-only", workspace: "workspace:/" }));
-      return;
-    }
-    if (requestUrl.pathname !== "/mcp") {
-      response.writeHead(404).end();
-      return;
-    }
-    if (!validateHost(request, response) || !validateOrigin(request, response)) return;
-    void nodeHandler(request, response);
-  });
+  const httpServer = createServer(
+    createHttpRequestHandler({
+      mcpHandler: nodeHandler,
+      resolveAuthenticationState: () => "authenticated-owner",
+      validateHost,
+      validateOrigin,
+    }),
+  );
 
   const shutdown = async (): Promise<void> => {
     await handler.close();
