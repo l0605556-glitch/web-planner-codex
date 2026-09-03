@@ -8,6 +8,7 @@
 - `WEB_PLAN` 通过 Codex 桌面应用直接向一个已有 ChatGPT 对话发送结构化 C2C 消息，并自动读取回复，不需要人工复制。
 - Codex 自动生成有范围限制的项目上下文包；ChatGPT 只能分析收到的只读内容。
 - 本地 MCP Bridge 提供 6 个只读工具，为以后接入远程 ChatGPT MCP 连接器保留标准接口。
+- `/mcp` 使用仓库外环境变量提供的单一所有者 Bearer Token，认证失败不会进入 MCP。
 - 所有文件修改、命令、测试、Git 提交和推送仍只由 Codex 完成。
 
 ## 两条通道
@@ -54,12 +55,19 @@ npm run typecheck
 npm test
 npm run build
 npm run context -- --workspace . --action overview
+$ownerTokenBytes = [byte[]]::new(32)
+[Security.Cryptography.RandomNumberGenerator]::Fill($ownerTokenBytes)
+$env:WEB_PLANNER_CODEX_OWNER_TOKEN = [Convert]::ToBase64String($ownerTokenBytes).TrimEnd("=").Replace("+", "-").Replace("/", "_")
 npm start -- --workspace . --port 43123
 ```
 
 `overview` 默认只列出 Git 已跟踪文件。未跟踪文件只报告数量，不暴露名称或内容；确有需要时，再由 Codex 按明确路径生成小范围上下文。
 
 服务仅监听 `127.0.0.1`。健康检查地址为 `http://127.0.0.1:43123/health`，MCP 地址为 `http://127.0.0.1:43123/mcp`。
+
+上面的 PowerShell 命令使用系统加密随机数生成器创建 256 位 Token，只保存在当前 PowerShell 进程及其子进程的环境中，关闭窗口后即消失。不要打印它、发送给 ChatGPT、写入仓库内文件或通过 `--token` 命令行参数传递。以后配置远程客户端时，由客户端通过 `Authorization: Bearer <owner-token>` 请求头提供同一份安全保存的值。
+
+服务启动时必须存在合法的 `WEB_PLANNER_CODEX_OWNER_TOKEN`；缺失、空白、过短或格式错误时会在监听端口前安全退出，并且错误消息不会包含 Token。项目不会读取 `.env` 文件，`.gitignore` 也会阻止常见 `.env` 文件被意外加入 Git。
 
 ## 单用户远程认证合同
 
@@ -72,7 +80,7 @@ npm start -- --workspace . --port 43123
 - 凭据不得写入仓库、测试样例、日志或发送给 ChatGPT 的上下文。
 - 默认监听地址仍为 `127.0.0.1`；本阶段没有开放远程端口。
 
-该合同目前定义在 `src/auth/contract.ts`。后续认证中间件必须遵守它，不能扩展成多用户、角色或组织系统。
+该合同定义在 `src/auth/contract.ts`，认证中间件与仓库外凭据解析分别位于 `src/auth/middleware.ts` 和 `src/auth/owner-credential.ts`。系统不能扩展成多用户、角色或组织模型。
 
 ## 只读边界
 

@@ -6,6 +6,7 @@ import path from "node:path";
 import { localhostHostValidation, localhostOriginValidation, toNodeHandler } from "@modelcontextprotocol/node";
 import { createMcpHandler } from "@modelcontextprotocol/server";
 
+import { createOwnerAuthenticationResolver } from "./auth/owner-credential.js";
 import { createHttpRequestHandler } from "./http/handler.js";
 import { buildMcpServer } from "./mcp/server.js";
 import { WorkspaceService } from "./workspace/service.js";
@@ -44,6 +45,7 @@ function parseOptions(args: readonly string[]): Options {
 
 async function main(): Promise<void> {
   const options = parseOptions(process.argv.slice(2));
+  const resolveAuthenticationState = createOwnerAuthenticationResolver();
   const workspace = await WorkspaceService.create(options.workspace, { trackedOnly: true });
   const handler = createMcpHandler(() => buildMcpServer(workspace));
   const nodeHandler = toNodeHandler(handler);
@@ -53,7 +55,7 @@ async function main(): Promise<void> {
   const httpServer = createServer(
     createHttpRequestHandler({
       mcpHandler: nodeHandler,
-      resolveAuthenticationState: () => "authenticated-owner",
+      resolveAuthenticationState,
       validateHost,
       validateOrigin,
     }),

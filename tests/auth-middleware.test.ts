@@ -1,9 +1,20 @@
-import { createServer, request, type Server } from "node:http";
+import { randomBytes } from "node:crypto";
+import {
+  createServer,
+  request,
+  type OutgoingHttpHeaders,
+  type Server,
+} from "node:http";
 import type { AddressInfo } from "node:net";
 
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { OwnerAuthenticationState } from "../src/auth/contract.js";
+import type { AuthenticationStateResolver } from "../src/auth/middleware.js";
+import {
+  createOwnerAuthenticationResolver,
+  OWNER_TOKEN_ENVIRONMENT_VARIABLE,
+} from "../src/auth/owner-credential.js";
 import { createHttpRequestHandler, type RequestGate } from "../src/http/handler.js";
 
 interface HttpResult {
@@ -13,6 +24,7 @@ interface HttpResult {
 
 interface HarnessOptions {
   authenticationError?: Error;
+  authenticationResolver?: AuthenticationStateResolver;
   authenticationState?: OwnerAuthenticationState;
   validateHost?: RequestGate;
   validateOrigin?: RequestGate;
@@ -41,10 +53,13 @@ async function startHarness(options: HarnessOptions = {}) {
       response.writeHead(200, { "content-type": "text/plain; charset=utf-8" });
       response.end("mcp reached");
     },
-    resolveAuthenticationState: () => {
+    resolveAuthenticationState: (request) => {
       authenticationCalls += 1;
       if (options.authenticationError) {
         throw options.authenticationError;
+      }
+      if (options.authenticationResolver) {
+        return options.authenticationResolver(request);
       }
       return options.authenticationState ?? "authenticated-owner";
     },
@@ -67,10 +82,10 @@ async function startHarness(options: HarnessOptions = {}) {
     get mcpCalls() {
       return mcpCalls;
     },
-    request(path: string, method = "GET"): Promise<HttpResult> {
+    request(path: string, method = "GET", headers?: OutgoingHttpHeaders): Promise<HttpResult> {
       return new Promise((resolve, reject) => {
         const outgoing = request(
-          { host: "127.0.0.1", method, path, port },
+          { headers, host: "127.0.0.1", method, path, port },
           (response) => {
             const chunks: Buffer[] = [];
             response.on("data", (chunk: Buffer) => chunks.push(chunk));
@@ -136,6 +151,28 @@ describe("HTTP authentication boundary", () => {
 
     expect(result).toEqual({ statusCode: 200, body: "mcp reached" });
     expect(harness.authenticationCalls).toBe(1);
+    expect(harness.mcpCalls).toBe(1);
+  });
+
+  it("integrates bearer verification with generic denial and MCP admission", async () => {
+    const ownerToken = randomBytes(32).toString("base64url");
+    const wrongToken = randomBytes(32).toString("base64url");
+    const authenticationResolver = createOwnerAuthenticationResolver({
+      [OWNER_TOKEN_ENVIRONMENT_VARIABLE]: ownerToken,
+    });
+    const harness = await startHarness({ authenticationResolver });
+
+    const missing = await harness.request("/mcp", "POST");
+    const invalid = await harness.request("/mcp", "POST", {
+      authorization: `Bearer ${wrongToken}`,
+    });
+    const admitted = await harness.request("/mcp", "POST", {
+      authorization: `Bearer ${ownerToken}`,
+    });
+
+    expect(missing).toEqual({ statusCode: 401, body: '{"error":"unauthorized"}' });
+    expect(invalid).toEqual({ statusCode: 401, body: '{"error":"unauthorized"}' });
+    expect(admitted).toEqual({ statusCode: 200, body: "mcp reached" });
     expect(harness.mcpCalls).toBe(1);
   });
 

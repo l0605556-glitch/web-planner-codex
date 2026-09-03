@@ -1,5 +1,7 @@
 # Local workflow state and private planning metadata
 .web-planner-codex/
+.env
+.env.*
 node_modules/
 dist/
 coverage/
