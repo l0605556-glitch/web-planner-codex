@@ -3,12 +3,14 @@
 import { createServer } from "node:http";
 import path from "node:path";
 
-import { localhostHostValidation, localhostOriginValidation, toNodeHandler } from "@modelcontextprotocol/node";
+import { toNodeHandler } from "@modelcontextprotocol/node";
 import { createMcpHandler } from "@modelcontextprotocol/server";
 
 import { createOwnerAuthenticationResolver } from "./auth/owner-credential.js";
 import { createHttpRequestHandler } from "./http/handler.js";
+import { createIngressPolicy } from "./http/ingress-policy.js";
 import { buildMcpServer } from "./mcp/server.js";
+import { loadRemoteConfiguration, LOOPBACK_BIND_HOST } from "./remote/config.js";
 import { WorkspaceService } from "./workspace/service.js";
 
 interface Options {
@@ -45,12 +47,12 @@ function parseOptions(args: readonly string[]): Options {
 
 async function main(): Promise<void> {
   const options = parseOptions(process.argv.slice(2));
+  const remoteConfiguration = loadRemoteConfiguration();
   const resolveAuthenticationState = createOwnerAuthenticationResolver();
   const workspace = await WorkspaceService.create(options.workspace, { trackedOnly: true });
   const handler = createMcpHandler(() => buildMcpServer(workspace));
   const nodeHandler = toNodeHandler(handler);
-  const validateHost = localhostHostValidation();
-  const validateOrigin = localhostOriginValidation();
+  const { validateHost, validateOrigin } = createIngressPolicy(remoteConfiguration);
 
   const httpServer = createServer(
     createHttpRequestHandler({
@@ -68,8 +70,10 @@ async function main(): Promise<void> {
   process.once("SIGINT", () => void shutdown());
   process.once("SIGTERM", () => void shutdown());
 
-  httpServer.listen(options.port, "127.0.0.1", () => {
-    console.error(`Read-only MCP bridge listening at http://127.0.0.1:${options.port}/mcp`);
+  httpServer.listen(options.port, LOOPBACK_BIND_HOST, () => {
+    console.error(
+      `Read-only MCP bridge listening in ${remoteConfiguration.mode} mode at http://${LOOPBACK_BIND_HOST}:${options.port}/mcp`,
+    );
   });
 }
 

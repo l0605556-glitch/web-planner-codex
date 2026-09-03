@@ -69,6 +69,28 @@ npm start -- --workspace . --port 43123
 
 服务启动时必须存在合法的 `WEB_PLANNER_CODEX_OWNER_TOKEN`；缺失、空白、过短或格式错误时会在监听端口前安全退出，并且错误消息不会包含 Token。项目不会读取 `.env` 文件，`.gitignore` 也会阻止常见 `.env` 文件被意外加入 Git。
 
+## HTTPS 隧道准备模式
+
+ChatGPT 网页版不会读取本机 Codex 的 MCP 配置；它需要通过插件访问远程 MCP。OpenAI 的当前开发指引要求为本地 MCP 提供 HTTPS，并列举 ngrok 或 Cloudflare Tunnel 作为开发方式。无论选择哪种方式，本项目都不会把 Node 服务直接暴露到网卡，而是保持以下边界：
+
+```text
+ChatGPT 网页版 → 受信任 HTTPS 隧道 → 127.0.0.1:<port>/mcp → Host/Origin 白名单 → Bearer 认证 → 只读 MCP
+```
+
+默认运行模式是 `local`。只有准备好外部 HTTPS 隧道后，才能在同一个启动进程中额外设置：
+
+```powershell
+$env:WEB_PLANNER_CODEX_MODE = "remote-tunnel"
+$env:WEB_PLANNER_CODEX_SECURE_INGRESS = "1"
+$env:WEB_PLANNER_CODEX_PUBLIC_HOSTNAME = "<your-exact-public-hostname>"
+```
+
+`WEB_PLANNER_CODEX_SECURE_INGRESS=1` 是操作者的安全确认，不是代码对 TLS 的密码学证明。缺少该确认、准确公网主机名或 T3 的所有者 Token，服务都会拒绝启动。远程模式仍只监听 `127.0.0.1`；隧道必须终止 HTTPS，并把请求转发到本机回环地址。Host 和 Origin 只接受回环主机或配置的准确公网主机名，`X-Forwarded-*` 不会被当作信任依据。
+
+仓库不会安装隧道、创建第三方账号、修改 Windows 防火墙或打开路由器端口。在真正连接前，还必须在当前 ChatGPT 插件界面确认它支持与本项目 Bearer Token 相容的认证方式；如果不支持，不得关闭服务端认证，应另行采用受支持的身份机制。
+
+参考：[OpenAI MCP 文档](https://learn.chatgpt.com/zh-Hans/docs/extend/mcp)、[OpenAI ChatGPT Apps 开发流程](https://learn.chatgpt.com/zh-Hans/use-cases/chatgpt-apps)。
+
 ## 单用户远程认证合同
 
 未来的远程入口只服务仓库所有者本人。认证边界位于远程请求与现有 MCP 处理器之间，不进入工作区读取逻辑，也不进入 Codex 执行通道。
@@ -95,6 +117,6 @@ npm start -- --workspace . --port 43123
 ## 目前暂不包含
 
 - ChatGPT 执行后代码审查。
-- 公网隧道和 OAuth。
+- 自动安装或配置公网 HTTPS 隧道，以及 OAuth。
 - 多用户、多电脑或多工作区。
 - ChatGPT 写文件、执行命令或修改 Git/GitHub。

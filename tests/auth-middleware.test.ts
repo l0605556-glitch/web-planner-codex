@@ -16,6 +16,7 @@ import {
   OWNER_TOKEN_ENVIRONMENT_VARIABLE,
 } from "../src/auth/owner-credential.js";
 import { createHttpRequestHandler, type RequestGate } from "../src/http/handler.js";
+import { createIngressPolicy } from "../src/http/ingress-policy.js";
 
 interface HttpResult {
   body: string;
@@ -173,6 +174,42 @@ describe("HTTP authentication boundary", () => {
     expect(missing).toEqual({ statusCode: 401, body: '{"error":"unauthorized"}' });
     expect(invalid).toEqual({ statusCode: 401, body: '{"error":"unauthorized"}' });
     expect(admitted).toEqual({ statusCode: 200, body: "mcp reached" });
+    expect(harness.mcpCalls).toBe(1);
+  });
+
+  it("keeps the remote tunnel ingress allowlist ahead of bearer authentication", async () => {
+    const ownerToken = randomBytes(32).toString("base64url");
+    const wrongToken = randomBytes(32).toString("base64url");
+    const authenticationResolver = createOwnerAuthenticationResolver({
+      [OWNER_TOKEN_ENVIRONMENT_VARIABLE]: ownerToken,
+    });
+    const ingressPolicy = createIngressPolicy({
+      mode: "remote-tunnel",
+      publicHostname: "mcp.example.test",
+    });
+    const harness = await startHarness({
+      authenticationResolver,
+      ...ingressPolicy,
+    });
+
+    const invalid = await harness.request("/mcp", "POST", {
+      authorization: `Bearer ${wrongToken}`,
+      host: "mcp.example.test",
+    });
+    const admitted = await harness.request("/mcp", "POST", {
+      authorization: `Bearer ${ownerToken}`,
+      host: "mcp.example.test",
+    });
+    const spoofed = await harness.request("/mcp", "POST", {
+      authorization: `Bearer ${ownerToken}`,
+      host: "attacker.example",
+      "x-forwarded-host": "mcp.example.test",
+    });
+
+    expect(invalid).toEqual({ statusCode: 401, body: '{"error":"unauthorized"}' });
+    expect(admitted).toEqual({ statusCode: 200, body: "mcp reached" });
+    expect(spoofed.statusCode).toBe(403);
+    expect(harness.authenticationCalls).toBe(2);
     expect(harness.mcpCalls).toBe(1);
   });
 
