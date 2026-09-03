@@ -1,17 +1,9 @@
 #!/usr/bin/env node
 
-import { createServer } from "node:http";
 import path from "node:path";
 
-import { toNodeHandler } from "@modelcontextprotocol/node";
-import { createMcpHandler } from "@modelcontextprotocol/server";
-
-import { createOwnerAuthenticationResolver } from "./auth/owner-credential.js";
-import { createHttpRequestHandler } from "./http/handler.js";
-import { createIngressPolicy } from "./http/ingress-policy.js";
-import { buildMcpServer } from "./mcp/server.js";
-import { loadRemoteConfiguration, LOOPBACK_BIND_HOST } from "./remote/config.js";
-import { WorkspaceService } from "./workspace/service.js";
+import { LOOPBACK_BIND_HOST } from "./remote/config.js";
+import { createBridgeServer } from "./server.js";
 
 interface Options {
   workspace: string;
@@ -47,32 +39,13 @@ function parseOptions(args: readonly string[]): Options {
 
 async function main(): Promise<void> {
   const options = parseOptions(process.argv.slice(2));
-  const remoteConfiguration = loadRemoteConfiguration();
-  const resolveAuthenticationState = createOwnerAuthenticationResolver();
-  const workspace = await WorkspaceService.create(options.workspace, { trackedOnly: true });
-  const handler = createMcpHandler(() => buildMcpServer(workspace));
-  const nodeHandler = toNodeHandler(handler);
-  const { validateHost, validateOrigin } = createIngressPolicy(remoteConfiguration);
+  const bridge = await createBridgeServer(options.workspace);
+  process.once("SIGINT", () => void bridge.close());
+  process.once("SIGTERM", () => void bridge.close());
 
-  const httpServer = createServer(
-    createHttpRequestHandler({
-      mcpHandler: nodeHandler,
-      resolveAuthenticationState,
-      validateHost,
-      validateOrigin,
-    }),
-  );
-
-  const shutdown = async (): Promise<void> => {
-    await handler.close();
-    httpServer.close();
-  };
-  process.once("SIGINT", () => void shutdown());
-  process.once("SIGTERM", () => void shutdown());
-
-  httpServer.listen(options.port, LOOPBACK_BIND_HOST, () => {
+  bridge.httpServer.listen(options.port, LOOPBACK_BIND_HOST, () => {
     console.error(
-      `Read-only MCP bridge listening in ${remoteConfiguration.mode} mode at http://${LOOPBACK_BIND_HOST}:${options.port}/mcp`,
+      `Read-only MCP bridge listening in ${bridge.remoteConfiguration.mode} mode at http://${LOOPBACK_BIND_HOST}:${options.port}/mcp`,
     );
   });
 }
